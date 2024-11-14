@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 
-from env import Env
+from Environment.env import Env
 import numpy as np
 import os 
 
@@ -227,7 +227,7 @@ def optimize_model():
     optimizer.step()
 
 if torch.cuda.is_available():
-    num_episodes = 2000
+    num_episodes = 200000
 else:
     num_episodes = 50
 
