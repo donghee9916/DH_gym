@@ -120,7 +120,7 @@ class Map:
         self.x = np.linspace(0, total_length, total_length * 2)
 
         self.minimum_lane_length = 70.0 # [m] 최소 차선 길이 
-        self.lc_dist = 40.0 # [m] 차선 변경 길이
+        self.lc_dist =20.0 # [m] 차선 변경 길이
 
 
         self.prev_action = 0
@@ -177,7 +177,7 @@ class Map:
         return lane_x[start_idx:end_idx], lane_y[start_idx:end_idx]
 
     def make_local_path(self, ego, action, lane_order):
-        lane_change_dist = 40 # [m] 차선 변경 길이 
+        lane_change_dist = 20 # [m] 차선 변경 길이 
         point_dist = 0.5 
         if self.prev_action != action or self.prev_x == None:
             # 주어진 action에 해당하는 차선이 있다면

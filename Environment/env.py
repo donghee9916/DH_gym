@@ -25,6 +25,7 @@ class Env(gym.Env):
         # self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
 
+        #################################### Rendering ####################################
         self.video_writer = None
         self.video_output_dir = "video_output"
         # 비디오 저장 폴더가 없으면 생성
@@ -50,7 +51,10 @@ class Env(gym.Env):
         self.x_range_min = - 50.0  # Ego 기준 좌측 50m
         self.x_range_max = + 100.0  # Ego 기준 우측 100m
 
+        self.success_rate = 0
 
+
+        ################################## State Setting #####################################
         self.num_lanes = 3
         self.lane_width = 3 
         self.state_dim = state_dim
@@ -67,6 +71,7 @@ class Env(gym.Env):
 
         # 시간 단계
         self.time_step = 0.02  # 20 ms
+        self.start_time = time.time()
 
 
         # 차량 및 장애물 객체 생성
@@ -99,6 +104,8 @@ class Env(gym.Env):
         # self.visualize(real_time=False)
 
     def reset(self):
+        self.start_time = time.time()
+
         self.ego = BicycleModel(self.map.lanes[self.num_lanes//2+1][0][0], self.map.lanes[self.num_lanes//2+1][1][0],
                                 heading=0.0, wheelbase=1.825, dt = self.time_step)
         self.controller = PurePursuitController(lookahead_distance= 15.0, wheelbase=1.825, )
@@ -108,6 +115,7 @@ class Env(gym.Env):
         self.collision_flag = False
         self.ep_end_flag = True
         self.prev_action = 0
+        self.reward = 0
         self.state = np.zeros(self.state_dim)
         obj_dict, dist_dict, ttc_dict = self.find_obs(self.obs,self.ego)
         self.state[0] = self.ego.vx
@@ -131,7 +139,7 @@ class Env(gym.Env):
         self.state[10] = dist_dict["CR"]
         self.state[11] = dist_dict["RR"]
 
-        self.state = np.array(self.state)
+        # self.state = np.array(self.state)
         return self.state
         
 
@@ -252,7 +260,7 @@ class Env(gym.Env):
         return ego_obj_dict, ego_dist_dict, ego_ttc_dict
 
 
-    def render(self):
+    def render(self, Model_name):
         """
         Real Time Visualization With pygame
         """
@@ -282,36 +290,36 @@ class Env(gym.Env):
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x, self.ego.y+1.5)))
         
         # Dist 
-        text_surface = self.font.render(f"TTC FL: {self.state[6]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC FL: {self.state[6]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, -3)))
-        text_surface = self.font.render(f"TTC FC: {self.state[7]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC FC: {self.state[7]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, 0.0)))
-        text_surface = self.font.render(f"TTC FR: {self.state[8]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC FR: {self.state[8]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, +3)))
-        text_surface = self.font.render(f"TTC RL: {self.state[9]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC RL: {self.state[9]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, -3)))
-        text_surface = self.font.render(f"TTC RC: {self.state[10]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC RC: {self.state[10]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, 0.0)))
-        text_surface = self.font.render(f"TTC RR: {self.state[11]:.2f} m", True, self.text_color)
+        text_surface = self.font.render(f"TTC RR: {self.state[11]:.2f} s", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, +3)))
 
         # TTC
-        text_surface = self.font.render(f"Dist FL: {self.state[12]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist FL: {self.state[12]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, -1.5)))
-        text_surface = self.font.render(f"Dist FC: {self.state[13]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist FC: {self.state[13]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, +1.5)))
-        text_surface = self.font.render(f"Dist FR: {self.state[14]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist FR: {self.state[14]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x+20, +4.5)))
-        text_surface = self.font.render(f"Dist RL: {self.state[15]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist RL: {self.state[15]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, -1.5)))
-        text_surface = self.font.render(f"Dist RC: {self.state[16]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist RC: {self.state[16]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, +1.5)))
-        text_surface = self.font.render(f"Dist RR: {self.state[17]:.2f} sec", True, self.text_color)
+        text_surface = self.font.render(f"Dist RR: {self.state[17]:.2f} m", True, self.text_color)
         self.screen.blit(text_surface, (self.scale_to_screen(self.ego.x-20, +4.5)))
 
         
         # Episode 번호 텍스트 표시
-        episode_text = f"Episode: {self.episode_num}"  # 현재 episode 번호를 표시
+        episode_text = f"Model : {Model_name}, Episode: {self.episode_num}, Success Rate: {self.success_rate}, Time : {time.time() - self.start_time:.2f}s"  # 현재 episode 번호를 표시
         font = pygame.font.Font(None, 36)  # 폰트 크기 설정
         text_surface = font.render(episode_text, True, (0, 0, 0))  # 텍스트 표기 (검정색)
 
@@ -491,10 +499,13 @@ class Env(gym.Env):
                 self.done = True
                 self.collision_flag = True
                 # print("Done with collision")
-        if self.ego.x >= 200.0:
+        if self.ego.x >= 500.0:
             self.done = True
             self.ep_end_flag = True
             # print("Done with end")
+        if time.time() - self.start_time > 200:
+            # 200초 이상 필요할 경우 
+            self.done = True
 
 
 
@@ -503,18 +514,13 @@ class Env(gym.Env):
         action : 0, 1, 2 : 좌 중 우 
         """
 
-        # print(f"action : {action}")
+
         action_1 = action[0] -1 
         action_2 = action[1]
 
 
-        # 현 action을 따르는 거동이 가능한가? 
-
-
-
         # 전역 경로 생성
         self.map.make_global_path(self.ego, self.lane_order)
-        
         # 로컬 경로 생성 
         path_x, path_y = self.map.make_local_path(self.ego, action_1, self.lane_order)
         
@@ -526,11 +532,11 @@ class Env(gym.Env):
         heading_diff_deg = np.degrees(heading_diff)  # degrees 단위로 변환
         
         if action_1 != 0 :
-            if lateral_offset <= 0.3 and heading_diff_deg <= 10.0:
-                print(f"Previous Lane Order : {self.lane_order}")
+            if lateral_offset <= 0.5:
+                # print(f"Previous Lane Order : {self.lane_order}")
                 self.lane_order += action_1 
                 self.lane_order = max(min(self.lane_order, 3),1)
-                print(f"New Lane order : {self.lane_order}")
+                # print(f"New Lane order : {self.lane_order}")
                 action_1 = 0
                 self.map.prev_action = 0
                 self.map.make_global_path(self.ego,self.lane_order)
@@ -582,17 +588,17 @@ class Env(gym.Env):
         self.is_done()
         
         """
-        Reward
+        Reward Calculation
         """
         minimum_spd = 30/3.6
         maximum_spd = 100/3.6
-        self.reward = 1.0
+        self.reward = 5.0
 
         # 8초간의 영역에 대해 weight를 넣겠다. 
         collision_threshold_time = 8
         dist_threshold = self.ego.vx * collision_threshold_time 
 
-        # Condition 1 : dist가 5도 안남았는데, 그 차선을 선택하는 행동을 한다?
+        # # Condition 1 : 8초 안에서 거리가 짧으면 ?
         if action_1 == -1 and dist_dict["LF"] <=dist_threshold:
             self.reward -=dist_threshold - dist_dict["LF"]
         elif action_1 == 0 and dist_dict["CF"] <=dist_threshold:
@@ -600,6 +606,7 @@ class Env(gym.Env):
         elif action_1 == 1 and dist_dict["RF"] <=dist_threshold:
             self.reward -=dist_threshold - dist_dict["RF"]
 
+        # Condition 2 : 8초 안으로 충돌이 예측되면 피하도록 
         if action_1 == -1 and ttc_dict["LF"] <= collision_threshold_time:
             self.reward -= collision_threshold_time - ttc_dict["LF"]
         elif action_1 == 0 and ttc_dict["CF"] <= collision_threshold_time:
@@ -607,32 +614,32 @@ class Env(gym.Env):
         elif action_1 == 1 and ttc_dict["RF"] <= collision_threshold_time:
             self.reward -= collision_threshold_time - ttc_dict["RF"]
 
-        self.reward += self.ego.x/ 10
+        self.reward += self.ego.x
+        self.reward += self.ego.vx
+
+        self.reward -= time.time() - self.start_time
         
         if self.lane_order == 1 and action_1 == -1:
-            self.reward -= 2000.0
+            self.reward -= 2.0
         elif self.lane_order == 3 and action_1 == 1:
-            self.reward -= 2000.0
+            self.reward -= 2.0
         
 
 
         if self.ego.vx < minimum_spd:
-            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd  * 20
+            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd * 3
         elif self.ego.vx < maximum_spd:
-            self.reward += self.ego.vx/100 * 10
+            self.reward += self.ego.vx/100 * 3
         else:
             self.reward -= 1.0
 
-        self.reward += self.ego.vx
-        if self.collision_flag == True: 
-            self.reward -= 20000.0
         if action_1 != self.prev_action:
             self.reward -= 2.0
 
         if self.ego.vx == 0.0 and action_2_acc_dict[action_2] < 0:
-            self.reward -= 10.0
+            self.reward -= 2.0
         if self.ep_end_flag:
-            self.reward += 2000.0
+            self.reward += 50.0
             
         """
         PRINT
@@ -643,14 +650,9 @@ class Env(gym.Env):
 
         ####################### Previous Step Update #######################
         self.prev_action = action_1
-        
+        self.if_success = not self.collision_flag
 
-
-        self.state = np.array(self.state)
-        
-        # self.state = np.array(self.state)
-        # self.state = np.array(self.state)
-        return self.state, self.reward, self.done
+        return self.state, self.reward, self.done, self.if_success
 
     
 def main():
