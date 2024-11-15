@@ -25,30 +25,30 @@ class Env(gym.Env):
         # self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,), dtype=np.float32)
 
 
-        self.video_writer = None
-        self.video_output_dir = "video_output"
-        # 비디오 저장 폴더가 없으면 생성
-        if not os.path.exists(self.video_output_dir):
-            os.makedirs(self.video_output_dir)
-        self.fps = 30
-        self.pygame_flag = True # 종료 : False , 켜져있음 : True'
-        self.episode_num = 1
-        pygame.init()
-        self.screen_width = 1500
-        self.screen_height = 500
-        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
-        self.clock = pygame.time.Clock()    # FPS 제어 
+        # self.video_writer = None
+        # self.video_output_dir = "video_output"
+        # # 비디오 저장 폴더가 없으면 생성
+        # if not os.path.exists(self.video_output_dir):
+        #     os.makedirs(self.video_output_dir)
+        # self.fps = 30
+        # self.pygame_flag = True # 종료 : False , 켜져있음 : True'
+        # self.episode_num = 1
+        # pygame.init()
+        # self.screen_width = 1500
+        # self.screen_height = 500
+        # self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        # self.clock = pygame.time.Clock()    # FPS 제어 
 
-        self.font = pygame.font.Font(None, 24)  # 텍스트 크기 설정 (예: 24픽셀)
-        self.text_color = (0, 0, 0)  # 텍스트 색상 (흰색)
+        # self.font = pygame.font.Font(None, 24)  # 텍스트 크기 설정 (예: 24픽셀)
+        # self.text_color = (0, 0, 0)  # 텍스트 색상 (흰색)
 
-        # Y축 범위 설정 (중앙: 0, 범위: +10 ~ -10)
-        self.y_range_min = -10.0
-        self.y_range_max = 10.0
+        # # Y축 범위 설정 (중앙: 0, 범위: +10 ~ -10)
+        # self.y_range_min = -10.0
+        # self.y_range_max = 10.0
 
-        # X축 범위 설정 (중앙: Ego 기준, 범위: -50 ~ +100)
-        self.x_range_min = - 50.0  # Ego 기준 좌측 50m
-        self.x_range_max = + 100.0  # Ego 기준 우측 100m
+        # # X축 범위 설정 (중앙: Ego 기준, 범위: -50 ~ +100)
+        # self.x_range_min = - 50.0  # Ego 기준 좌측 50m
+        # self.x_range_max = + 100.0  # Ego 기준 우측 100m
 
 
         self.num_lanes = 3
@@ -256,11 +256,11 @@ class Env(gym.Env):
         """
         Real Time Visualization With pygame
         """
-        if self.pygame_flag == False:
-            self.restart()
-            self.pygame_flag = True
+        # if self.pygame_flag == False:
+        #     self.restart()
+        #     self.pygame_flag = True
         # Fill screen with white
-        self.screen.fill((255, 255, 255))
+        # self.screen.fill((255, 255, 255))
 
         # EGO 차량 그리기
         ego_rect_x = [corner[0] for corner in self.ego.rotated_corners] + [self.ego.rotated_corners[0][0]]
@@ -373,9 +373,9 @@ class Env(gym.Env):
 
         self.clock.tick(30)  # FPS 조정 (30 FPS로 설정)
 
-        # 50 episode마다 비디오 저장
-        if self.episode_num-1 % 50 == 0:
-            self.save_frame_as_video()
+        # # 50 episode마다 비디오 저장
+        # if self.episode_num-1 % 50 == 0:
+        #     self.save_frame_as_video()
 
     def start_video_recording(self):
         """비디오 기록을 시작하는 함수"""
@@ -491,7 +491,7 @@ class Env(gym.Env):
                 self.done = True
                 self.collision_flag = True
                 # print("Done with collision")
-        if self.ego.x >= 200.0:
+        if self.ego.x >= 500.0:
             self.done = True
             self.ep_end_flag = True
             # print("Done with end")
@@ -526,11 +526,11 @@ class Env(gym.Env):
         heading_diff_deg = np.degrees(heading_diff)  # degrees 단위로 변환
         
         if action_1 != 0 :
-            if lateral_offset <= 0.3 and heading_diff_deg <= 10.0:
-                print(f"Previous Lane Order : {self.lane_order}")
+            if lateral_offset <= 0.5 or heading_diff_deg <= 10.0:
+                # print(f"Previous Lane Order : {self.lane_order}")
                 self.lane_order += action_1 
                 self.lane_order = max(min(self.lane_order, 3),1)
-                print(f"New Lane order : {self.lane_order}")
+                # print(f"New Lane order : {self.lane_order}")
                 action_1 = 0
                 self.map.prev_action = 0
                 self.map.make_global_path(self.ego,self.lane_order)
@@ -586,7 +586,7 @@ class Env(gym.Env):
         """
         minimum_spd = 30/3.6
         maximum_spd = 100/3.6
-        self.reward = 1.0
+        self.reward = 100.0
 
         # 8초간의 영역에 대해 weight를 넣겠다. 
         collision_threshold_time = 8
@@ -610,22 +610,22 @@ class Env(gym.Env):
         self.reward += self.ego.x/ 10
         
         if self.lane_order == 1 and action_1 == -1:
-            self.reward -= 2000.0
+            self.reward -= 200.0
         elif self.lane_order == 3 and action_1 == 1:
-            self.reward -= 2000.0
+            self.reward -= 200.0
         
 
 
         if self.ego.vx < minimum_spd:
-            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd  * 20
+            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd *2
         elif self.ego.vx < maximum_spd:
-            self.reward += self.ego.vx/100 * 10
+            self.reward += self.ego.vx/100 *2
         else:
             self.reward -= 1.0
 
         self.reward += self.ego.vx
-        if self.collision_flag == True: 
-            self.reward -= 20000.0
+        # if self.collision_flag == True: 
+        #     self.reward -= 20000.0
         if action_1 != self.prev_action:
             self.reward -= 2.0
 

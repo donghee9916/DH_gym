@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn 
 import torch.optim as optim 
 import torch.nn.functional as F 
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from model.dqn import DQN, ReplayMemory
 from model.actorcritic import ActorCritic, Actor, Critic
@@ -50,7 +50,7 @@ class Runner():
         self.episode_durations = []
         self.episode_rewards = [] 
 
-        self.writer = SummaryWriter(self.Model_logs)
+        # self.writer = SummaryWriter(self.Model_logs)
 
         """
         DQN Setting 
@@ -150,6 +150,8 @@ class Runner():
                                           batch.next_state)), device=self.device, dtype=torch.bool)
             non_final_next_states = torch.cat([s for s in batch.next_state
                                                 if s is not None])
+
+            print(f"state batch : {batch.state}, type : {type(batch.state)}\n")
             state_batch = torch.cat(batch.state)
             action_batch = torch.cat(batch.action)
             reward_batch = torch.cat(batch.reward)
@@ -216,12 +218,19 @@ class Runner():
                 for t in count():
                     action = self.select_action(state)
                     
-                    self.env.render()
+                    # self.env.render()
                     # if i_episode % 10 == 0 :
                     #     self.env.render()
                     observation, reward, done = self.env.step(action.squeeze(0).cpu().numpy())
                     reward = torch.tensor([reward], device=self.device)
                     next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
+                    
+                    # print(f"state : {state}, type : {type(state)}")
+                    # print(f"action : {action}, type : {type(action)}")
+                    # print(f"next_state : {next_state}, type : {type(next_state)}")
+                    # print(f"reward : {reward}, type : {type(reward)}\n")
+
+
                     self.memory.push(state, action, next_state, reward)
                     state = next_state
                     self.optimize_model()
@@ -265,10 +274,10 @@ class Runner():
 
                 a_loss, c_loss = self.update_a2c()
                 
-                self.writer.add_scalar("Critic Loss", c_loss, i_episode)
-                self.writer.add_scalar("Actor Loss", a_loss, i_episode)
-                self.writer.add_scalar("Reward", rewards, i_episode)
-                self.writer.add_scalar("Mean Reward", np.mean(smoothed_reward), i_episode)
+                # self.writer.add_scalar("Critic Loss", c_loss, i_episode)
+                # self.writer.add_scalar("Actor Loss", a_loss, i_episode)
+                # self.writer.add_scalar("Reward", rewards, i_episode)
+                # self.writer.add_scalar("Mean Reward", np.mean(smoothed_reward), i_episode)
 
                 self.plots["Critic Loss"].append(c_loss * 100)
                 self.plots["Actor Loss"].append(a_loss)

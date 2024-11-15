@@ -120,7 +120,7 @@ class Map:
         self.x = np.linspace(0, total_length, total_length * 2)
 
         self.minimum_lane_length = 70.0 # [m] 최소 차선 길이 
-        self.lc_dist = 40.0 # [m] 차선 변경 길이
+        self.lc_dist = 20.0 # [m] 차선 변경 길이
 
 
         self.prev_action = 0
