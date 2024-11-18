@@ -519,16 +519,16 @@ class Env(gym.Env):
         # Condition 3 : Collision Occur
         if self.collision_flag:
             self.reward -= 100.0
-            conditional_rewards["collision"] = -300.0
+            conditional_rewards["collision"] = -10.0
 
     
 
         if self.lane_order == 1 and action_1 == -1:
             self.reward -= 2.0
-            conditional_rewards["lane change"] = -2.0
+            conditional_rewards["lane change"] = -1.0
         elif self.lane_order == 3 and action_1 == 1:
             self.reward -= 2.0
-            conditional_rewards["lane change"] = -2.0
+            conditional_rewards["lane change"] = -1.0
 
         
         # Condition 4 : Speed Limit  RANGE [0.0 ~ 1.0]
@@ -537,7 +537,7 @@ class Env(gym.Env):
             conditional_rewards["spd"] = -(minimum_spd - self.ego.vx) / minimum_spd 
         elif self.ego.vx < maximum_spd:
             self.reward += self.ego.vx/100 
-            conditional_rewards["spd"] = self.ego.vx/100
+            conditional_rewards["spd"] = (self.ego.vx*3.6 - 30.0)/70.0
         else:
             self.reward -= 1.0
             conditional_rewards["spd"] = -1.0
@@ -545,17 +545,17 @@ class Env(gym.Env):
         # Condition 5 : Action Change   RANGE [0.0 ~ 3.0]
         if action_1 != self.prev_action:
             self.reward -= 3.0
-            conditional_rewards["prev action"] = -3.0
+            conditional_rewards["prev action"] = -1.0
 
 
         # Condition 6 : At Low Velocity No More Stop Sig [0 ~ 1.0]
         if self.ego.vx == 0.0 and action_2_acc_dict[action_2] < 0:
             self.reward -= 2.0
-            conditional_rewards["stop"] = -2.0
+            conditional_rewards["stop"] = -1.0
 
         # Condition 7 : If IT Ends Successfully + Rewards
         if self.ep_end_flag:
-            conditional_rewards["end"] = 50.0
+            conditional_rewards["end"] = 10.0
             self.reward += 50.0
 
 
