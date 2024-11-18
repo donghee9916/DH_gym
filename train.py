@@ -23,6 +23,7 @@ from model.Multi_Action.dqn import DQN_Base, DQN, ReplayMemory
 from model.actorcritic import ActorCritic, Actor, Critic
 from model.Multi_Action.ppo import * 
 from model.Multi_Action.discrete_A3C import *
+from model.Multi_Action.ddqn import * 
 from shared_adam import SharedAdam
 from IPython import display
 
@@ -48,8 +49,8 @@ class Runner():
 
 
         self.params = dict()
-        self.Model = "PPO"  ## AC, DQN, PPO, A3C
-        self.Model_logs = self.Model + "_decision"
+        self.Model = "DQN"  ## AC, DQN, PPO, A3C, DDQN
+        self.Model_logs = "logs/" + self.Model + "_decision"
 
         """
         PLOT VARIABLES 
@@ -57,30 +58,43 @@ class Runner():
         self.episode_durations = []
         self.episode_rewards = [] 
 
-        self.writer = SummaryWriter(self.Model_logs)
+        # self.writer = SummaryWriter(self.Model_logs)
 
         """
         DQN Setting 
         """
+        if self.Model == "DQN":
         # self.Transition = namedtuple('Transition',('state', 'action', 'next_state', 'reward'))
-        self.params["DQN"] = dict()
-        self.params["DQN"]["BATCH_SIZE"] = 128
-        self.params["DQN"]["GAMMA"] = 0.99
-        self.params["DQN"]["EPS_START"] = 0.9
-        self.params["DQN"]["EPS_END"] = 0.05
-        self.params["DQN"]["EPS_DECAY"] = 1000
-        self.params["DQN"]["TAU"] = 0.005
-        self.params["DQN"]["LR"] = 1e-4
+            self.params["DQN"] = dict()
+            self.params["DQN"]["BATCH_SIZE"] = 128
+            self.params["DQN"]["GAMMA"] = 0.99
+            self.params["DQN"]["EPS_START"] = 0.9
+            self.params["DQN"]["EPS_END"] = 0.05
+            self.params["DQN"]["EPS_DECAY"] = 1000
+            self.params["DQN"]["TAU"] = 0.005
+            self.params["DQN"]["LR"] = 1e-4
 
-        # self.policy_net = DQN_Base(self.n_observations, self.n_actions, self.params).to(self.device)
-        # self.target_net = DQN_Base(self.n_observations, self.n_actions, self.params).to(self.device)
-        self.dqn = DQN(self.n_observations, self.n_actions, self.params)
-        
-        self.dqn.target_net.load_state_dict(self.dqn.policy_net.state_dict())
+            # self.policy_net = DQN_Base(self.n_observations, self.n_actions, self.params).to(self.device)
+            # self.target_net = DQN_Base(self.n_observations, self.n_actions, self.params).to(self.device)
+            self.dqn = DQN(self.n_observations, self.n_actions, self.params)
+            
+            self.dqn.target_net.load_state_dict(self.dqn.policy_net.state_dict())
 
-        # self.optimizer = optim.AdamW(self.dqn.policy_net.parameters(), lr = self.params["DQN"]["LR"], amsgrad=True)
-        # self.memory = ReplayMemory(10000)
-        self.steps_done = 0
+            # self.optimizer = optim.AdamW(self.dqn.policy_net.parameters(), lr = self.params["DQN"]["LR"], amsgrad=True)
+            # self.memory = ReplayMemory(10000)
+            self.steps_done = 0
+        elif self.Model == "DDQN":
+            self.params["DDQN"] = dict()
+            self.params["DDQN"]["GAMMA"] = 0.99
+            self.params["DDQN"]["EXPLORE"] = 20000
+            self.params["DDQN"]["INITIAL_EPSILON"] = 0.1
+            self.params["DDQN"]["FINAL_EPSILON"] = 0.0001
+            self.params["DDQN"]["REPLAY_MEMORY"] = 50000
+            self.params["DDQN"]["BATCH"] = 16
+            self.params["DDQN"]["UPDATE_STEPS"] = 4
+
+
+            self.ddqn = DDQN(self.n_observations, self.n_actions, self.params)
 
         # """
         # Actor Critic Setting
@@ -98,44 +112,44 @@ class Runner():
         # self.optimizerA = optim.AdamW(self.actor.parameters(), lr = self.params["AC"]["LR"])
         # self.optimizerC = optim.AdamW(self.critic.parameters(), lr= self.params["AC"]["LR"])
         
+        elif self.Model == "PPO":
+            """
+            Proximal Policy Optimization 
+            """
+            self.params["PPO"] = dict()
+            self.params["PPO"]["lr_actor"] = 0.0003
+            self.params["PPO"]["lr_critic"] = 0.001
+            self.params["PPO"]["gamma"] = 0.99
+            self.params["PPO"]["K_epochs"] = 80
+            self.params["PPO"]["eps_clip"] = 0.20
 
-        """
-        Proximal Policy Optimization 
-        """
-        self.params["PPO"] = dict()
-        self.params["PPO"]["lr_actor"] = 0.0003
-        self.params["PPO"]["lr_critic"] = 0.001
-        self.params["PPO"]["gamma"] = 0.99
-        self.params["PPO"]["K_epochs"] = 80
-        self.params["PPO"]["eps_clip"] = 0.20
+            # if Continuous
+            self.params["PPO"]["random_seed"] = 0                   
+            self.params["PPO"]["action_std"] = 0.6                  # starting std for action distribution (Multivariate Normal
+            self.params["PPO"]["action_decay_rate"] = 0.05          # linearly decay action_std (action_std  action_std - action_std_decay_rate)
+            self.params["PPO"]["min_action_std"] = 0.1              # minimum action_std (stop decay after action_std = min_action_std) 
+            self.params["PPO"]["action_std_decay_freq"] = 100000    # action_std decay frequency (in num timesteps) 
 
-        # if Continuous
-        self.params["PPO"]["random_seed"] = 0                   
-        self.params["PPO"]["action_std"] = 0.6                  # starting std for action distribution (Multivariate Normal
-        self.params["PPO"]["action_decay_rate"] = 0.05          # linearly decay action_std (action_std  action_std - action_std_decay_rate)
-        self.params["PPO"]["min_action_std"] = 0.1              # minimum action_std (stop decay after action_std = min_action_std) 
-        self.params["PPO"]["action_std_decay_freq"] = 100000    # action_std decay frequency (in num timesteps) 
+            print(self.n_actions)
+            self.ppo = PPO(self.n_observations, self.n_actions[0], self.n_actions[1], self.params)
+        elif self.Model == "A3C":
+            """
+            Asynchronous Advantage Actor-Critic (비동기식 Actor Critic 모델)
+            """
+            self.params["A3C"] = dict()
+            self.params["A3C"]["MAX_EP"] = 3000
+            self.params["A3C"]["GAMMA"] = 0.99
+            self.params["A3C"]["UPDATE_GLOBAL_ITER"] = 5
+            self.params["A3C"]["lr"] = 1e-4
 
-        print(self.n_actions)
-        self.ppo = PPO(self.n_observations, self.n_actions[0], self.n_actions[1], self.params)
-
-        """
-        Asynchronous Advantage Actor-Critic (비동기식 Actor Critic 모델)
-        """
-        self.params["A3C"] = dict()
-        self.params["A3C"]["MAX_EP"] = 3000
-        self.params["A3C"]["GAMMA"] = 0.99
-        self.params["A3C"]["UPDATE_GLOBAL_ITER"] = 5
-        self.params["A3C"]["lr"] = 1e-4
-
-        self.gnet = Net(self.n_observations, self.n_actions[0], self.n_actions[1])
-        self.gnet.share_memory()
-        opt = SharedAdam(self.gnet.parameters(), lr=self.params["A3C"]["lr"],
-                         betas=(0.92, 0.999))
-        self.global_ep, self.global_ep_r, self.res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
-        
-        self.a3c_workers = [Worker( self.env, self.gnet, opt,self.global_ep, self.global_ep_r, self.res_queue, self.params,self.n_observations, self.n_actions[0], self.n_actions[1], i)
-                             for i in range(mp.cpu_count())]
+            self.gnet = Net(self.n_observations, self.n_actions[0], self.n_actions[1])
+            self.gnet.share_memory()
+            opt = SharedAdam(self.gnet.parameters(), lr=self.params["A3C"]["lr"],
+                            betas=(0.92, 0.999))
+            self.global_ep, self.global_ep_r, self.res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
+            
+            self.a3c_workers = [Worker( self.env, self.gnet, opt,self.global_ep, self.global_ep_r, self.res_queue, self.params,self.n_observations, self.n_actions[0], self.n_actions[1], i)
+                                for i in range(mp.cpu_count())]
         
 
     def save_model(self, dqn_policy_net, episode_num):
@@ -148,57 +162,6 @@ class Runner():
             print(f"Model saved to episode {episode_num} to {save_path}")
 
 
-    # def plot_durations(self,success_rate_history, final_x_history, show_result=False):
-    #     # figure 1을 생성 또는 활성화하여 사용
-    #     plt.figure(1, figsize=(15, 5))  # 하나의 창에서 3개의 서브플롯을 배치
-        
-    #     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    #     # 서브플롯 1: 보상 시각화
-    #     ax1 = axes[0]   # 1행 3열의 첫 번째 서브플롯
-    #     reward_t = torch.tensor(self.episode_rewards, dtype=torch.float)
-    #     ax1.plot(reward_t)  # 보상 그래프
-    #     ax1.set_title("Rewards")
-    #     ax1.set_xlabel('Episode')
-    #     ax1.set_ylabel('Rewards')
-
-    #     # 서브플롯 2: 성공률 시각화
-    #     ax2 = axes[1]  # 1행 3열의 두 번째 서브플롯
-    #     success_rate_history = torch.tensor(success_rate_history, dtype=torch.float)
-    #     ax2.plot(success_rate_history)  # 성공률 그래프
-    #     ax2.set_title("Success Rate")
-    #     ax2.set_xlabel('Episode')
-    #     ax2.set_ylabel('Success Rate')
-
-    #     # 서브플롯 3: 마지막 x값 시각화
-    #     ax3 = axes[2]  # 1행 3열의 세 번째 서브플롯
-    #     final_x_t = torch.tensor(final_x_history, dtype=torch.float)
-    #     ax3.plot(final_x_t)  # 마지막 x값 그래프
-    #     ax3.set_title("Final x Values")
-    #     ax3.set_xlabel('Episode')
-    #     ax3.set_ylabel('Final x')
-
-    #     # 제목 설정
-    #     if show_result:
-    #         plt.suptitle('Result')  # 전체 그래프의 제목
-    #     else:
-    #         plt.clf()  # 기존의 그래프를 지우고 새로운 그래프를 그리기 전, 클리어
-    #         plt.suptitle('Training...')  # 훈련 중 제목
-
-    #     # 그래프 레이아웃을 자동으로 조정
-    #     plt.tight_layout()
-    #     plt.subplots_adjust(top=0.85)  # 제목이 겹치지 않도록 조정
-        
-    #     # 잠시 멈추어 그래프를 업데이트
-    #     plt.pause(0.001)
-
-    #     # IPython 환경에서 그래프를 실시간으로 표시
-    #     if self.is_ipython:
-    #         if not show_result:
-    #             display.display(plt.gcf())  # 현재 figure를 IPython에서 표시
-    #             display.clear_output(wait=True)  # 이전 출력을 지우고 새로운 출력만 표시
-    #         else:
-    #             display.display(plt.gcf())  # 결과 표시 시 새로운 출력만
-
     def plot_durations(self,final_x_history, show_result=False):
         plt.figure(1)
         durations_t = torch.tensor(self.episode_durations, dtype=torch.float)
@@ -209,10 +172,11 @@ class Runner():
         else:
             plt.clf()
             plt.title('Training...')
-        plt.xlabel('Final X')
-        plt.ylabel('Rewards')
+        plt.xlabel('Episodes')
+        plt.ylabel('Reward')
         # plt.plot(durations_t.numpy())
-        plt.plot(final_x_history.numpy())
+        plt.plot(reward_t.numpy())
+        # plt.plot(final_x_history.numpy())
         plt.pause(0.001)  # 도표가 업데이트되도록 잠시 멈춤
         if self.is_ipython:
             if not show_result:
@@ -251,7 +215,7 @@ class Runner():
             # state : np.ndarray 
             state = self.env.reset()
             # state : torch Float32 tensor 
-            if self.Model == "DQN":
+            if self.Model == "DQN" or "DDQN":
                 state = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
             
             """
@@ -262,6 +226,7 @@ class Runner():
             smooth = 10 
             done = False
             episode_reward = 0 
+            if self.Model == "DDQN": self.ddqn.init()
 
             if self.Model == "DQN":
                 for t in count():
@@ -271,6 +236,7 @@ class Runner():
                     # if i_episode % 10 == 0 :
                     #     self.env.render()
                     observation, reward, done, is_success = self.env.step(action.squeeze(0).cpu().numpy())
+                    episode_reward += reward
                     reward = torch.tensor([reward], device=self.device)
                     next_state = torch.tensor(observation, dtype=torch.float32, device=self.device).unsqueeze(0)
                     
@@ -287,11 +253,113 @@ class Runner():
                     if done:
                         final_x_history.append(self.env.ego.x)
                         self.episode_durations.append(t + 1)
-                        self.episode_rewards.append(reward.item())
+                        self.episode_rewards.append(episode_reward)
                         self.plot_durations(final_x_history)
                         if (i_episode +1) % 500 == 0:
                             self.dqn.save_model(i_episode + 1)
                         break
+
+            elif self.Model == "DDQN":
+                while not done:
+                    # State ==> torch.FloatTensor   
+                    # torch.Size([1, 18]) <class 'torch.Tensor'>
+                    action = self.ddqn.select_action(state) # list, 2
+                    next_state, reward, done, is_success = self.env.step(action)
+                    # next_state => numpy.ndarray , (18,)
+                    # reward => float
+                    # done => bool
+                    # is_success => bool
+                    episode_reward += reward
+
+
+                    reward = torch.tensor([reward], device=self.device)                                         # torch.Tensor, [1]
+                    next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).unsqueeze(0) # torch.Tensor, [1, 18]
+                    action = torch.tensor(action, dtype=torch.float32, device=self.device).unsqueeze(0)         # torch.Tensor, [1, 2]
+                    ddqn_done = torch.tensor(done, dtype=torch.bool, device=self.device).unsqueeze(0)           # torch.Tensor, [1]
+
+
+                    self.ddqn.memory.add((state, next_state, action, reward, ddqn_done))
+                    if self.ddqn.memory.size() > 128:
+                        if self.ddqn.begin_learn is False:
+                            print('learn begin!')
+                            self.ddqn.begin_learn = True
+                        self.ddqn.learn_steps += 1 
+                        if self.ddqn.learn_steps % self.ddqn.UPDATE_STEPS == 0:
+                            self.ddqn.targetQNetwork.load_state_dict(self.ddqn.onlineQNetwork.state_dict())
+                        batch = self.ddqn.memory.sample(self.ddqn.BATCH, False) # List
+
+                        batch_state, batch_next_state, batch_action, batch_reward, batch_done = zip(*batch)
+
+                        batch_state = torch.stack(batch_state).to(device)                   # torch.Tensor, [16,1,18]
+                        batch_next_state = torch.stack(batch_next_state).to(device)         # torch.Tensor, [16,1,18]
+                        batch_action = torch.stack(batch_action).unsqueeze(1).to(device)    # torch.Tensor, [16,1,1,2]
+                        batch_reward = torch.stack(batch_reward).unsqueeze(1).to(device)    # torch.Tensor, [16,1,1]
+                        batch_done = torch.stack(batch_done).unsqueeze(1).to(device)        # torch.Tensor, [16,1,1]
+
+                        with torch.no_grad():
+                            # self.ddqn.onlineQNetwork = self.ddqn.onlineQNetwork(batch_next_state)
+                            # self.ddqn.targetQNetwork = self.ddqn.targetQNetwork(batch_next_state)
+                            # online_max_action = torch.argmax(self.ddqn.onlineQNetwork, dim=1, keepdim=True)
+                            # y = batch_reward + (1-batch_done) * self.ddqn.GAMMA * self.ddqn.targetQNetwork.gather(1, onlinse_max_action.long())
+                            online_Q1, online_Q2 = self.ddqn.onlineQNetwork(batch_next_state)
+                            target_Q1, target_Q2 = self.ddqn.targetQNetwork(batch_next_state)
+
+                            online_max_action_1 = torch.argmax(online_Q1, dim=1, keepdim=True)
+                            online_max_action_2 = torch.argmax(online_Q2, dim=1, keepdim=True)
+
+                            # Bool type batch done을 float type으로 변경 
+                            batch_done = batch_done.float()
+
+                            y_1 = batch_reward + (1 - batch_done) * self.ddqn.GAMMA * target_Q1.gather(1, online_max_action_1)
+                            y_2 = batch_reward + (1 - batch_done) * self.ddqn.GAMMA * target_Q2.gather(1, online_max_action_2)
+                            print(f"y 1 : {y_1}, size : {y_1.size()}")
+                            print(f"y 2 : {y_2}, size : {y_2.size()}")
+
+                        
+                        batch_action = batch_action.squeeze(1).squeeze(1)
+                        
+                        
+                        online_Q1 = online_Q1.squeeze(1)
+                        online_Q2 = online_Q2.squeeze(1) 
+
+
+                        print(f"Online Q1 : {online_Q1}, size : {online_Q1.size()}")
+                        print(f"batch action : {batch_action}, size : {batch_action.size()}")
+                        
+
+
+                        predicted_Q1 = online_Q1.gather(1, batch_action[:, 0].unsqueeze(1).long())
+                        predicted_Q2 = online_Q2.gather(1, batch_action[:, 1].unsqueeze(1).long())
+                        print("Requires grad check:")
+                        print("predicted_Q1:", predicted_Q1.requires_grad)
+                        print("predicted_Q2:", predicted_Q2.requires_grad)
+                        print("y_1:", y_1.requires_grad)
+                        print("y_2:", y_2.requires_grad)
+
+                        loss_1 = F.mse_loss(predicted_Q1, y_1)
+                        loss_2 = F.mse_loss(predicted_Q2, y_2)
+
+                        total_loss = loss_1 + loss_2 
+
+                    
+                        # loss = F.mse_loss(self.ddqn.onlineQNetwork(batch_state).gather(1, batch_action.long()), y)
+
+
+                        self.ddqn.optimizer.zero_grad()
+                        total_loss.backward()
+                        self.ddqn.optimizer.step()
+                        self.ddqn.writer.add_scalar('loss', loss.item(), global_step=self.ddqn.learn_steps)
+
+                        if self.ddqn.epsilon > self.ddqn.FINAL_EPSILON:
+                            self.ddqn.epsilon -= (self.ddqn.INITIAL_EPSILON - self.ddqn.FINAL_EPSILON) / self.ddqn.EXPLORE
+                    
+                    if done:
+                        final_x_history.append(self.env.ego.x)
+                        self.episode_durations.append(t + 1)
+                        self.episode_rewards.append(reward.item())
+                        self.plot_durations(final_x_history)
+                        break
+                    state = next_state
 
                     
             elif self.Model == "PPO":
@@ -394,8 +462,8 @@ class Runner():
                 plt.xlabel('Step')
                 plt.show()        
         
-        print('Complete')
-        self.plot_durations(final_x_history=final_x_history,show_result=True)
+        # print('Complete')
+        # self.plot_durations(final_x_history=final_x_history,show_result=True)
         plt.ioff()
         plt.show()
 

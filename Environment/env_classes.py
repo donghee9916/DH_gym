@@ -67,7 +67,9 @@ class Object:
         self.L = 4.650
         self.lane_order = lane_order 
         self.rotated_corners = []
+        self.safety_rotated_corners = []
         self.get_corners()
+
 
     def update(self):
         if self.is_moving:
@@ -92,6 +94,12 @@ class Object:
             [-self.L / 2, -self.W / 2],# 오른쪽 뒤 (RR)
             [-self.L / 2, self.W / 2]  # 왼쪽 뒤 (RL)
         ])
+        safe_corners = np.array([
+            [(self.L+2.0)/2,  (self.W + 0.4)/2],
+            [(self.L+2.0)/2, -(self.W + 0.4)/2],
+            [-(self.L+2.0)/2,-(self.W + 0.4)/2],
+            [-(self.L+2.0)/2, (self.W + 0.4)/2]
+        ])
         rotation_matrix = np.array([
             [cos_heading, -sin_heading],
             [sin_heading, cos_heading]
@@ -99,10 +107,14 @@ class Object:
 
         # 회전 적용 후, 차량 중심으로 이동
         rotated_corners = np.dot(corners, rotation_matrix.T)  # 회전 후 코너 좌표 계산
+        self.safety_rotated_corners = np.dot(safe_corners, rotation_matrix.T)
         # 회전된 좌표를 차량의 중심 (self.x, self.y)으로 이동
         rotated_corners[:, 0] += self.x  # x 좌표 이동
         rotated_corners[:, 1] += self.y  # y 좌표 이동
+        self.safety_rotated_corners[:, 0] += self.x
+        self.safety_rotated_corners[:, 1] += self.y
         self.rotated_corners = rotated_corners
+
 
 
     

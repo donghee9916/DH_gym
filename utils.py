@@ -83,3 +83,4 @@ def sat_collision_check(object1_corners, object2_corners):
             return False
     return True
 
+

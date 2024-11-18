@@ -83,6 +83,7 @@ class Env(gym.Env):
         self.lane_order = self.num_lanes//2 + 1 
         self.collision_flag = False
         self.ep_end_flag = False
+        self.warnning_flag = False
         
 
         # GPP 경로 시각화
@@ -100,19 +101,18 @@ class Env(gym.Env):
         self.lpp_y = []
 
 
-
-        # self.visualize(real_time=False)
-
     def reset(self):
         self.start_time = time.time()
 
         self.ego = BicycleModel(self.map.lanes[self.num_lanes//2+1][0][0], self.map.lanes[self.num_lanes//2+1][1][0],
                                 heading=0.0, wheelbase=1.825, dt = self.time_step)
+        self.ego.vx = 50.0/3.6 # 초기 속도
         self.controller = PurePursuitController(lookahead_distance= 15.0, wheelbase=1.825, )
         self.lane_order = self.num_lanes//2 + 1 
         self.done = False
         self.is_lane_changing = False
         self.collision_flag = False
+        self.warnning_flag = False
         self.ep_end_flag = True
         self.prev_action = 0
         self.reward = 0
@@ -150,11 +150,11 @@ class Env(gym.Env):
         id = 0 
         lane_index = 0
         obj_x = 0.0
-        while obj_x <= 500:
+        while obj_x <= 1000:
             id +=1 
             lane_order = lane_orders[lane_index]
             lane_y = self.map.lanes[lane_order][1][0]
-            obj_x += 50.0 
+            obj_x += 100.0 
             vx = 0.0
             vy = 0.0 
             is_moving = False 
@@ -183,10 +183,6 @@ class Env(gym.Env):
 
         return obstacles
         
-
-        
-
-
     def generate_random_obstacles(self, num_obstacles):
         obstacles = []
         for _ in range(num_obstacles):
@@ -348,6 +344,17 @@ class Env(gym.Env):
             else:
                 color = (0, 0, 0)  # 기본 색상 (검정)
 
+            color_safe = (0, 200, 0)
+
+            # 장애물 안전영역 그리기
+            obs_safe_x = [corner[0] for corner in obj.safety_rotated_corners] + [obj.safety_rotated_corners[0][0]]
+            obs_safe_y = [corner[1] for corner in obj.safety_rotated_corners] + [obj.safety_rotated_corners[0][1]]
+
+            obs_safe_x = [self.scale_to_screen(x, obj.y)[0] for x in obs_safe_x]
+            obs_safe_y = [self.scale_to_screen(obj.x, y)[1] for y in obs_safe_y]
+
+            pygame.draw.polygon(self.screen, color_safe, list(zip(obs_safe_x, obs_safe_y)))
+            
             # 장애물 사각형 그리기
             obs_rect_x = [corner[0] for corner in obj.rotated_corners] + [obj.rotated_corners[0][0]]
             obs_rect_y = [corner[1] for corner in obj.rotated_corners] + [obj.rotated_corners[0][1]]
@@ -427,86 +434,140 @@ class Env(gym.Env):
         # 화면 업데이트를 위한 기본 설정
         self.clock = pygame.time.Clock()
             
-    
-    def visualize(self, real_time = False):
-
-
-        # 실시간 시뮬레이션
-        if real_time:
-            plt.ion()  # Interactive mode 활성화
-
-
-        self.ax.cla()
-        
-        ## EGO ##
-        ego_rect_x = [corner[0] for corner in self.ego.rotated_corners] + [self.ego.rotated_corners[0][0]]
-        ego_rect_y = [corner[1] for corner in self.ego.rotated_corners] + [self.ego.rotated_corners[0][1]]
-        self.ax.plot(ego_rect_x, ego_rect_y, color='blue', label="Ego Vehicle")
-        self.ax.scatter(self.ego.x, self.ego.y, color='black')  # 현재 차량 위치 표시
-        self.ax.legend()
-        
-        ## OBJECT ##
-        for obj in self.obs:
-            # 장애물의 차선 구분
-            lane_id = self.get_lane_for_object(obj.y)
-
-            if lane_id == self.lane_order - 1:
-                # 좌측 전방(LF) 또는 좌측 후방(LR)
-                if obj.x >= self.ego.x:
-                    color = 'red'  #'blue'  # 좌측 전방은 파란색
-                else:
-                    color = 'gray'  # 좌측 후방은 회색
-            elif lane_id == self.lane_order:
-                # 중앙 전방(CF) 또는 중앙 후방(CR)
-                if obj.x >= self.ego.x:
-                    color = 'red' # 'green'  # 중앙 전방은 초록색
-                else:
-                    color = 'gray' # 'lightgray'  # 중앙 후방은 연회색
-            elif lane_id == self.lane_order + 1:
-                # 우측 전방(RF) 또는 우측 후방(RR)
-                if obj.x >= self.ego.x:
-                    color = 'red'  # 우측 전방은 빨간색
-                else:
-                    color = 'gray' # 'darkgray'  # 우측 후방은 진회색
-            else:
-                color = 'black'  # 그 외의 경우 (이 경우에는 차량이 아닌 다른 장애물이라 가정)
-
-            # 장애물 사각형 시각화
-            obs_rect_x = [corner[0] for corner in obj.rotated_corners] + [obj.rotated_corners[0][0]]
-            obs_rect_y = [corner[1] for corner in obj.rotated_corners] + [obj.rotated_corners[0][1]]
-            self.ax.plot(obs_rect_x, obs_rect_y, color=color)  # 지정된 색으로 장애물 그리기
-            self.ax.scatter(obj.x, obj.y, color=color, s=100)  # 장애물 위치 표시
-
-        
-        # 차선 표시 
-        self.ax.plot(self.lpp_x, self.lpp_y, color='green', label="Local Path", linewidth=3)
-    
-        for lane_id, (x, y) in self.map.lanes.items():
-            self.ax.plot(x, y, linestyle='--', label=f'Lane {lane_id}', color='black')
-        
-        # 차량 중심을 기준으로 범위 설정
-        self.ax.set_xlim(self.ego.x - 30, self.ego.x + 30)  # x축은 차량 중심 ±30m
-        self.ax.set_ylim(self.ego.y - 10, self.ego.y + 10)  # y축은 차량 중심 ±10m
-        if real_time:
-            plt.pause(0.01)
-        
-        plt.show()
 
     def is_done(self):
         self.done = False
+        self.collision_flag = False
+        self.warnning_flag = False
         for obj in self.obs:
             if sat_collision_check(self.ego.rotated_corners, obj.rotated_corners):
-                self.done = True
+                # self.done = True
                 self.collision_flag = True
-                # print("Done with collision")
+            elif sat_collision_check(self.ego.rotated_corners, obj.safety_rotated_corners):
+                self.warnning_flag = True
         if self.ego.x >= 500.0:
             self.done = True
             self.ep_end_flag = True
+        else:
+            self.ep_end_flag = False
             # print("Done with end")
         if time.time() - self.start_time > 200:
             # 200초 이상 필요할 경우 
             self.done = True
 
+    def calculate_reward(self, dist_dict, ttc_dict, action_2_acc_dict, action):
+        """
+        Reward Calculation
+        """
+        action_1 = action[0] -1 
+        action_2 = action[1]
+        minimum_spd = 50.0/3.6
+        maximum_spd = 100.0/3.6
+        self.reward = 5.0 # Basic Reward
+
+        # 8초간의 영역에 대해 weight를 넣겠다. 
+        collision_threshold_time = 8
+        dist_threshold = self.ego.vx * collision_threshold_time 
+        min_dist_threshold = 30.0
+        min_ttc_threshold = 3.0
+
+        dist_value = 90.0
+        ttc_value = 90.0
+
+
+
+        if action_1 == -1 : 
+            dist_value = dist_dict["LF"]
+            ttc_value = ttc_dict["LF"]
+        elif action_1 == 0:
+            dist_value = dist_dict["CF"]
+            ttc_value = ttc_dict["CF"]
+        elif action_1 == 1:
+            dist_value = dist_dict["RF"]
+            ttc_value = ttc_dict["RF"]
+
+        conditional_rewards = dict()
+        conditional_rewards["dist"] = 0.0
+        conditional_rewards["ttc"] = 0.0
+        conditional_rewards["collision"] = 0.0
+        conditional_rewards["lane change"] = 0.0
+        conditional_rewards["spd"] = 0.0
+        conditional_rewards["prev action"] = 0.0
+        conditional_rewards["stop"] = 0.0
+        conditional_rewards["end"] = 0.0
+        conditional_rewards["warnning"] = 0.0
+
+
+        # # Condition 1 : 8초 안에서 거리가 짧으면 ?  RANGE [0.0 ~ 1.0]
+        if dist_value <= dist_threshold:
+            if dist_value < min_dist_threshold:
+                # 최소 거리보다 짧을 경우 
+                self.reward -= 1.0 
+                conditional_rewards["dist"] = -1.0
+            else:
+                # 최소 거리보다는 길 경우
+                self.reward -= (dist_threshold - dist_value)/ dist_threshold
+                conditional_rewards["dist"] = -(dist_threshold - dist_value)/ dist_threshold
+
+
+        # Condition 2 : 8초 안으로 충돌이 예측되면 피하도록    RANGE [0.0 ~ 1.0]
+        if ttc_value < collision_threshold_time:
+            self.reward -= (collision_threshold_time - ttc_value)/collision_threshold_time
+            conditional_rewards["ttc"] = -(collision_threshold_time - ttc_value)/collision_threshold_time
+
+
+        # Condition 3 : Collision Occur
+        if self.collision_flag:
+            self.reward -= 100.0
+            conditional_rewards["collision"] = -300.0
+
+    
+
+        if self.lane_order == 1 and action_1 == -1:
+            self.reward -= 2.0
+            conditional_rewards["lane change"] = -2.0
+        elif self.lane_order == 3 and action_1 == 1:
+            self.reward -= 2.0
+            conditional_rewards["lane change"] = -2.0
+
+        
+        # Condition 4 : Speed Limit  RANGE [0.0 ~ 1.0]
+        if self.ego.vx < minimum_spd:
+            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd 
+            conditional_rewards["spd"] = -(minimum_spd - self.ego.vx) / minimum_spd 
+        elif self.ego.vx < maximum_spd:
+            self.reward += self.ego.vx/100 
+            conditional_rewards["spd"] = self.ego.vx/100
+        else:
+            self.reward -= 1.0
+            conditional_rewards["spd"] = -1.0
+
+        # Condition 5 : Action Change   RANGE [0.0 ~ 3.0]
+        if action_1 != self.prev_action:
+            self.reward -= 3.0
+            conditional_rewards["prev action"] = -3.0
+
+
+        # Condition 6 : At Low Velocity No More Stop Sig [0 ~ 1.0]
+        if self.ego.vx == 0.0 and action_2_acc_dict[action_2] < 0:
+            self.reward -= 2.0
+            conditional_rewards["stop"] = -2.0
+
+        # Condition 7 : If IT Ends Successfully + Rewards
+        if self.ep_end_flag:
+            conditional_rewards["end"] = 50.0
+            self.reward += 50.0
+
+
+        # Condition 8 : Warnning Flag:
+        if self.warnning_flag:
+            conditional_rewards["warnnig"] = -5.0
+            self.reward -= 5.0
+        
+        os.system('clear')
+        print(f"Total Reward : {self.reward}")
+        for key, value in conditional_rewards.items():
+            print(f"The reward for {key} is {value:.2f}")            
 
 
     def step(self, action):
@@ -587,60 +648,8 @@ class Env(gym.Env):
 
         self.is_done()
         
-        """
-        Reward Calculation
-        """
-        minimum_spd = 30/3.6
-        maximum_spd = 100/3.6
-        self.reward = 5.0
-
-        # 8초간의 영역에 대해 weight를 넣겠다. 
-        collision_threshold_time = 8
-        dist_threshold = self.ego.vx * collision_threshold_time 
-
-        # # Condition 1 : 8초 안에서 거리가 짧으면 ?
-        if action_1 == -1 and dist_dict["LF"] <=dist_threshold:
-            self.reward -=dist_threshold - dist_dict["LF"]
-        elif action_1 == 0 and dist_dict["CF"] <=dist_threshold:
-            self.reward -=dist_threshold - dist_dict["CF"]
-        elif action_1 == 1 and dist_dict["RF"] <=dist_threshold:
-            self.reward -=dist_threshold - dist_dict["RF"]
-
-        # Condition 2 : 8초 안으로 충돌이 예측되면 피하도록 
-        if action_1 == -1 and ttc_dict["LF"] <= collision_threshold_time:
-            self.reward -= collision_threshold_time - ttc_dict["LF"]
-        elif action_1 == 0 and ttc_dict["CF"] <= collision_threshold_time:
-            self.reward -= collision_threshold_time - ttc_dict["CF"]
-        elif action_1 == 1 and ttc_dict["RF"] <= collision_threshold_time:
-            self.reward -= collision_threshold_time - ttc_dict["RF"]
-
-        self.reward += self.ego.x
-        self.reward += self.ego.vx
-
-        self.reward -= time.time() - self.start_time
+        self.calculate_reward(dist_dict, ttc_dict, action_2_acc_dict, action)
         
-        if self.lane_order == 1 and action_1 == -1:
-            self.reward -= 2.0
-        elif self.lane_order == 3 and action_1 == 1:
-            self.reward -= 2.0
-        
-
-
-        if self.ego.vx < minimum_spd:
-            self.reward -= (minimum_spd - self.ego.vx) / minimum_spd * 3
-        elif self.ego.vx < maximum_spd:
-            self.reward += self.ego.vx/100 * 3
-        else:
-            self.reward -= 1.0
-
-        if action_1 != self.prev_action:
-            self.reward -= 2.0
-
-        if self.ego.vx == 0.0 and action_2_acc_dict[action_2] < 0:
-            self.reward -= 2.0
-        if self.ep_end_flag:
-            self.reward += 50.0
-            
         """
         PRINT
         """
@@ -661,7 +670,6 @@ def main():
         action = np.random.choice([-1, 0, 1])
         start_time = time.time()
         state, reward, done = env.step(action)
-        # env.visualize(real_time=True)
         if done:
             break
 
